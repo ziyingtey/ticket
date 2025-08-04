@@ -1,0 +1,90 @@
+{
+  "name": "FairFest 2025 Ticket #001",
+  "description": "Exclusive access pass to FairFest 2025 - Web3 Music Festival at MetaVerse Stadium. This NFT ticket grants entry and serves as proof of attendance.",
+  "image": "ipfs://QmYourImageHashHere/fairfest-ticket.png",
+  "external_url": "https://fairpass.xyz/events/1",
+  "animation_url": "ipfs://QmYourAnimationHashHere/ticket-animation.mp4",
+  "attributes": [
+    {
+      "trait_type": "Event",
+      "value": "FairFest 2025"
+    },
+    {
+      "trait_type": "Venue",
+      "value": "MetaVerse Stadium"
+    },
+    {
+      "trait_type": "Date",
+      "value": "2025-12-15"
+    },
+    {
+      "trait_type": "Time",
+      "value": "19:00 UTC"
+    },
+    {
+      "trait_type": "Ticket Type",
+      "value": "General Admission"
+    },
+    {
+      "trait_type": "Price",
+      "value": "0.01 MATIC"
+    },
+    {
+      "trait_type": "Gate",
+      "value": "A"
+    },
+    {
+      "trait_type": "Row",
+      "value": "General"
+    },
+    {
+      "trait_type": "Carbon Offset",
+      "value": "1 Token"
+    },
+    {
+      "trait_type": "Sustainability Verified",
+      "value": "Yes"
+    },
+    {
+      "trait_type": "DID Verified",
+      "value": "Ceramic"
+    },
+    {
+      "trait_type": "Resale Protected",
+      "value": "Yes"
+    }
+  ],
+  "properties": {
+    "eventId": 1,
+    "ticketId": 1,
+    "originalPrice": "0.01",
+    "maxResalePrice": "0.02",
+    "eventDate": 1735142400,
+    "purchaseDate": 1701043200,
+    "qrData": {
+      "contractAddress": "0x...",
+      "tokenId": "1",
+      "eventId": "1",
+      "validation": "blockchain"
+    },
+    "sustainability": {
+      "carbonOffsetTokens": 1,
+      "paperTicketsSaved": 1,
+      "digitalFirst": true
+    },
+    "access": {
+      "vipLounge": false,
+      "earlyEntry": false,
+      "merchDiscount": 10
+    }
+  },
+  "fairpass": {
+    "version": "1.0",
+    "ticketStandard": "ERC-721",
+    "blockchain": "Polygon",
+    "network": "Mumbai Testnet",
+    "antiScalping": true,
+    "didIntegration": true,
+    "sustainabilityTracking": true
+  }
+} 

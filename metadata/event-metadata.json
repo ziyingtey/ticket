@@ -1,0 +1,136 @@
+{
+  "event": {
+    "id": 1,
+    "name": "FairFest 2025 - Web3 Music Festival",
+    "description": "Join us for the most innovative music festival of 2025, where blockchain technology meets live entertainment. Experience cutting-edge performances while supporting sustainable event practices.",
+    "longDescription": "FairFest 2025 represents the future of live events - a festival that combines world-class musical performances with blockchain innovation and environmental responsibility. Our Web3-native approach ensures fair ticket distribution, prevents scalping, and tracks our carbon footprint in real-time. Every ticket is an NFT that serves as both access pass and digital collectible, with built-in anti-scalping protection and resale controls.",
+    "image": "ipfs://QmYourEventImageHash/fairfest-banner.jpg",
+    "banner": "ipfs://QmYourBannerHash/fairfest-wide-banner.jpg",
+    "logo": "ipfs://QmYourLogoHash/fairfest-logo.png"
+  },
+  "details": {
+    "venue": {
+      "name": "MetaVerse Stadium",
+      "address": "123 Blockchain Avenue, Crypto City",
+      "capacity": 50000,
+      "coordinates": {
+        "latitude": 40.7589,
+        "longitude": -73.9851
+      },
+      "amenities": ["VIP Lounge", "Food Court", "Merchandise Store", "NFT Gallery"]
+    },
+    "schedule": {
+      "eventDate": "2025-12-15",
+      "startTime": "19:00",
+      "endTime": "23:00",
+      "timezone": "UTC",
+      "doors": "18:00",
+      "soundcheck": "17:30"
+    },
+    "lineup": [
+      {
+        "artist": "CryptoBeats",
+        "time": "19:30-20:15",
+        "stage": "Main Stage"
+      },
+      {
+        "artist": "NFT Symphony",
+        "time": "20:30-21:15",
+        "stage": "Main Stage"
+      },
+      {
+        "artist": "Blockchain Orchestra",
+        "time": "21:30-22:30",
+        "stage": "Main Stage"
+      }
+    ]
+  },
+  "ticketing": {
+    "totalTickets": 1000,
+    "price": "0.01 MATIC",
+    "maxResalePrice": "0.02 MATIC",
+    "salesStart": "2025-11-01T00:00:00Z",
+    "salesEnd": "2025-12-15T17:00:00Z",
+    "ticketTypes": [
+      {
+        "type": "General Admission",
+        "price": "0.01 MATIC",
+        "quantity": 800,
+        "benefits": ["Event Access", "Merch Discount 10%"]
+      },
+      {
+        "type": "VIP",
+        "price": "0.05 MATIC",
+        "quantity": 200,
+        "benefits": ["Event Access", "VIP Lounge", "Early Entry", "Merch Discount 20%", "Meet & Greet"]
+      }
+    ]
+  },
+  "sustainability": {
+    "enabled": true,
+    "goals": {
+      "carbonNeutral": true,
+      "paperlessTickets": true,
+      "renewableEnergy": 100,
+      "wasteReduction": 75
+    },
+    "initiatives": [
+      "Digital-only tickets (no paper)",
+      "Carbon offset tracking per attendee",
+      "Renewable energy powered venue",
+      "Local vendor sourcing",
+      "Waste reduction programs"
+    ],
+    "metrics": {
+      "estimatedCO2Saved": "500 kg",
+      "paperTicketsSaved": 1000,
+      "carbonOffsetTokensIssued": 1000
+    }
+  },
+  "technology": {
+    "blockchain": "Polygon",
+    "network": "Mumbai Testnet",
+    "contractAddress": "0x...",
+    "didIntegration": {
+      "enabled": true,
+      "providers": ["Ceramic", "SpruceID"],
+      "anonymousAccess": true
+    },
+    "features": [
+      "Anti-scalping protection",
+      "Resale price controls",
+      "QR code validation",
+      "Real-time verification",
+      "NFT collectible",
+      "Carbon tracking"
+    ]
+  },
+  "social": {
+    "website": "https://fairfest.fairpass.xyz",
+    "twitter": "@FairFest2025",
+    "discord": "https://discord.gg/fairfest",
+    "telegram": "https://t.me/fairfest2025",
+    "hashtags": ["#FairFest2025", "#Web3Music", "#BlockchainEvents", "#SustainableFestivals"]
+  },
+  "organizer": {
+    "name": "FairPass Events",
+    "contact": "events@fairpass.xyz",
+    "website": "https://fairpass.xyz",
+    "verified": true,
+    "reputation": 5.0
+  },
+  "legal": {
+    "terms": "ipfs://QmYourTermsHash/terms-and-conditions.pdf",
+    "privacy": "ipfs://QmYourPrivacyHash/privacy-policy.pdf",
+    "refundPolicy": "Refunds available up to 48 hours before event",
+    "ageRestriction": "18+",
+    "jurisdiction": "Global"
+  },
+  "metadata": {
+    "version": "1.0",
+    "createdAt": "2024-11-01T00:00:00Z",
+    "updatedAt": "2024-11-01T00:00:00Z",
+    "standard": "FairPass Event Metadata v1.0",
+    "ipfsHash": "QmYourEventMetadataHash"
+  }
+} 

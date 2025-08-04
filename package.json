@@ -1,0 +1,41 @@
+{
+  "name": "fairpass",
+  "version": "1.0.0",
+  "description": "Blockchain-based socially responsible ticketing system for fair, fraud-proof, and inclusive access to events",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:mumbai": "hardhat run scripts/deploy.js --network mumbai",
+    "verify": "hardhat verify --network mumbai",
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm start",
+    "setup-frontend": "cd frontend && npm install"
+  },
+  "keywords": ["blockchain", "nft", "ticketing", "polygon", "social-good", "sustainability", "fairpass"],
+  "author": "FairPass Team",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomiclabs/hardhat-etherscan": "^3.1.7",
+    "dotenv": "^17.2.1",
+    "ethers": "^5.8.0",
+    "hardhat": "^2.26.1",
+    "hardhat-gas-reporter": "^1.0.9"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.3",
+    "@pinata/sdk": "^2.1.0",
+    "ipfs-http-client": "^60.0.1",
+    "mongodb": "^6.3.0",
+    "mongoose": "^8.1.1",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  }
+}
