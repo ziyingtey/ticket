@@ -1,0 +1,80 @@
+🔧 Using demo email configuration
+📧 To enable real email delivery:
+   1. Create a Gmail account for FairPass
+   2. Enable 2-Factor Authentication
+   3. Generate an App Password
+   4. Set EMAIL_USER=your-gmail@gmail.com
+   5. Set EMAIL_PASS=your-app-password
+
+
+███████╗ █████╗ ██╗██████╗  █████╗ ███████╗███████╗
+██╔════╝██╔══██╗██║██╔══██╗██╔══██╗██╔════╝██╔════╝
+█████╗  ███████║██║██████╔╝███████║█████╗  ███████╗
+██╔══╝  ██╔══██║██║██╔══██╗██╔══██║██╔══╝  ╚════██║
+██║     ██║  ██║██║██║  ██║██║  ██║███████╗███████║
+╚═╝     ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝
+
+🎫 FairPass API Server Running
+🌐 Port: 3001
+📊 Database: MongoDB with Authentication
+🔒 Security: JWT Authentication + Dynamic QR Codes
+🎯 Features: Purchase Limits + Transfer System + Anti-Fraud
+💰 Price Control: Resale limits enforced
+👥 User Management: Email registration required
+🚫 Anti-Fraud: QR codes expire every 30 seconds
+📱 QR Protection: Prevents external platform selling
+🔄 Transfer System: Recipient confirmation required
+💸 Resale Limits: Maximum price multipliers enforced
+🚀 Ready for production!
+  
+✅ MongoDB connected successfully
+❌ Error creating indexes: An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: { v: 2, unique: true, key: { verificationToken: 1 }, name: "verificationToken_1" }, existing index: { v: 2, key: { verificationToken: 1 }, name: "verificationToken_1" }
+✅ Sample data already exists
+2025-08-04T19:43:13.798Z - POST /api/auth/register
+
+========================================
+📧 EMAIL NOTIFICATION (Demo Mode)
+========================================
+To: ziying041109@gmail.com
+Subject: 🎫 Welcome to FairPass - Please Verify Your Email
+
+========================================
+
+⚠️  EMAIL NOT ACTUALLY SENT - DEMO MODE ACTIVE
+
+To enable real email delivery:
+1. Create a Gmail account for FairPass
+2. Enable 2-Factor Authentication  
+3. Generate an App Password
+4. Set environment variables:
+   EMAIL_USER=your-gmail@gmail.com
+   EMAIL_PASS=your-app-password
+
+For now, check the email content below:
+
+Welcome to FairPass, Zi Ying!
+
+Thank you for registering! Please verify your email address to complete your account setup.
+
+Click here to verify: http://localhost:3000/auth/verify?token=undefined
+
+This link will expire in 24 hours.
+
+If you didn't create this account, you can safely ignore this email.
+
+FairPass - Fair, Secure, Sustainable Ticketing
+    
+
+========================================
+
+2025-08-04T19:43:24.388Z - POST /api/auth/login
+2025-08-04T19:43:26.944Z - GET /api/events
+2025-08-04T19:43:29.433Z - POST /api/tickets/purchase
+2025-08-04T19:43:31.472Z - GET /api/events
+2025-08-04T19:43:33.491Z - GET /api/tickets/my
+2025-08-04T19:43:33.495Z - GET /api/tickets/my
+2025-08-04T19:43:33.587Z - GET /api/events
+2025-08-04T19:43:33.591Z - GET /api/events
+2025-08-04T19:43:34.194Z - GET /api/tickets/my
+2025-08-04T19:43:34.197Z - GET /api/tickets/my
+2025-08-04T19:43:38.469Z - POST /api/qr/generate

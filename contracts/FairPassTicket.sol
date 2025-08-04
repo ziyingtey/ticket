@@ -1,56 +1,381 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract FairPassTicket is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
+/**
+ * @title FairPassTicket
+ * @dev Enhanced NFT ticket system with anti-scalping and fairness mechanisms
+ * Built for the Blockchain for Good Alliance hackathon
+ * Implements SDG 10 (Reduced Inequality) and SDG 9 (Innovation)
+ */
+contract FairPassTicket is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, Pausable, ReentrancyGuard {
     using Counters for Counters.Counter;
-    
-    Counters.Counter private _tokenIds;
-    Counters.Counter private _eventIds;
-    
+
+    Counters.Counter private _tokenIdCounter;
+
+    // Event and Ticket Management
     struct Event {
-        uint256 id;
         string name;
-        string venue;
+        string description;
         uint256 eventDate;
-        uint256 ticketPrice;
-        uint256 maxTickets;
-        uint256 ticketsSold;
-        uint256 maxResalePrice;
-        bool requiresDID;
-        address organizer;
+        uint256 originalPrice;
+        uint256 maxSupply;
+        uint256 currentSupply;
+        address payable organizer;
         bool isActive;
-        uint256 sustainabilityTracking; // CO2 offset in grams
+        // Anti-scalping features
+        uint256 maxResaleMultiplier; // e.g., 110 = 110% of original price
+        uint256 royaltyPercentage;   // e.g., 10 = 10% to organizer
+        uint256 maxTicketsPerUser;   // Anti-scalping: limit per wallet
+        bool requiresVerification;   // DID verification required
     }
-    
+
     struct Ticket {
         uint256 eventId;
-        address originalBuyer;
-        uint256 purchasePrice;
-        bool isUsed;
+        uint256 originalPrice;
+        bool hasAttended;
         uint256 purchaseTimestamp;
-        string didVerification;
+        address originalBuyer;
     }
-    
-    // Mappings
+
+    // State variables
     mapping(uint256 => Event) public events;
     mapping(uint256 => Ticket) public tickets;
-    mapping(uint256 => bool) public eventExists;
-    mapping(address => mapping(uint256 => uint256)) public ticketCountForEvent; // address => eventId => count
-    mapping(address => uint256[]) public userTickets; // user's ticket IDs
+    mapping(uint256 => mapping(address => uint256)) public userTicketCount; // eventId => user => count
+    mapping(address => bool) public verifiedUsers; // DID verification status
     
-    // Events
-    event EventCreated(uint256 indexed eventId, string name, address indexed organizer);
-    event TicketMinted(uint256 indexed tokenId, uint256 indexed eventId, address indexed buyer, string did);
-    event TicketUsed(uint256 indexed tokenId, uint256 indexed eventId);
-    event TicketResold(uint256 indexed tokenId, address indexed from, address indexed to, uint256 price);
-    
-    constructor() ERC721("FairPass Ticket", "FAIRPASS") {}
+    uint256 private _eventIdCounter;
+    uint256 public platformFee = 200; // 2% platform fee (200 basis points)
+    address payable public platformWallet;
+
+    // Events for tracking and analytics
+    event EventCreated(uint256 indexed eventId, string name, address organizer, uint256 maxSupply);
+    event TicketMinted(uint256 indexed tokenId, uint256 indexed eventId, address indexed buyer, uint256 price);
+    event TicketResold(uint256 indexed tokenId, address indexed seller, address indexed buyer, uint256 price, uint256 royalty);
+    event AttendanceMarked(uint256 indexed tokenId, uint256 indexed eventId, address indexed attendee);
+    event UserVerified(address indexed user, bool verified);
+    event FraudAlert(address indexed user, string reason, uint256 timestamp);
+
+    constructor() ERC721("FairPass Ticket", "FAIR") {
+        platformWallet = payable(msg.sender);
+    }
+
+    // ==============================================================================
+    // EVENT MANAGEMENT (For Organizers)
+    // ==============================================================================
+
+    /**
+     * @dev Create a new event with anti-scalping parameters
+     * @param name Event name
+     * @param description Event description  
+     * @param eventDate Event timestamp
+     * @param originalPrice Ticket price in wei
+     * @param maxSupply Maximum tickets available
+     * @param maxResaleMultiplier Maximum resale price (e.g., 110 = 110%)
+     * @param royaltyPercentage Organizer royalty on resales (e.g., 10 = 10%)
+     * @param maxTicketsPerUser Anti-scalping limit per wallet
+     * @param requiresVerification Whether DID verification is required
+     */
+    function createEvent(
+        string memory name,
+        string memory description,
+        uint256 eventDate,
+        uint256 originalPrice,
+        uint256 maxSupply,
+        uint256 maxResaleMultiplier,
+        uint256 royaltyPercentage,
+        uint256 maxTicketsPerUser,
+        bool requiresVerification
+    ) public returns (uint256) {
+        require(eventDate > block.timestamp, "Event date must be in the future");
+        require(originalPrice > 0, "Price must be greater than 0");
+        require(maxSupply > 0, "Max supply must be greater than 0");
+        require(maxResaleMultiplier >= 100, "Resale multiplier must be at least 100%");
+        require(royaltyPercentage <= 25, "Royalty cannot exceed 25%");
+        require(maxTicketsPerUser > 0 && maxTicketsPerUser <= 10, "Invalid tickets per user limit");
+
+        uint256 eventId = _eventIdCounter;
+        _eventIdCounter++;
+
+        events[eventId] = Event({
+            name: name,
+            description: description,
+            eventDate: eventDate,
+            originalPrice: originalPrice,
+            maxSupply: maxSupply,
+            currentSupply: 0,
+            organizer: payable(msg.sender),
+            isActive: true,
+            maxResaleMultiplier: maxResaleMultiplier,
+            royaltyPercentage: royaltyPercentage,
+            maxTicketsPerUser: maxTicketsPerUser,
+            requiresVerification: requiresVerification
+        });
+
+        emit EventCreated(eventId, name, msg.sender, maxSupply);
+        return eventId;
+    }
+
+    // ==============================================================================
+    // TICKET PURCHASING (Anti-Scalping Mechanisms)
+    // ==============================================================================
+
+    /**
+     * @dev Purchase tickets with anti-scalping protection
+     * @param eventId Event to purchase tickets for
+     * @param quantity Number of tickets to purchase
+     */
+    function purchaseTickets(uint256 eventId, uint256 quantity) 
+        public 
+        payable 
+        nonReentrant 
+        whenNotPaused 
+    {
+        Event storage eventData = events[eventId];
+        require(eventData.isActive, "Event is not active");
+        require(block.timestamp < eventData.eventDate, "Event has already occurred");
+        require(quantity > 0, "Quantity must be greater than 0");
+        
+        // Anti-scalping: Check user ticket limit
+        require(
+            userTicketCount[eventId][msg.sender] + quantity <= eventData.maxTicketsPerUser,
+            "Exceeds maximum tickets per user"
+        );
+        
+        // Supply check
+        require(
+            eventData.currentSupply + quantity <= eventData.maxSupply,
+            "Not enough tickets available"
+        );
+
+        // DID verification check
+        if (eventData.requiresVerification) {
+            require(verifiedUsers[msg.sender], "User verification required");
+        }
+
+        // Payment verification
+        uint256 totalPrice = eventData.originalPrice * quantity;
+        uint256 platformFeeAmount = (totalPrice * platformFee) / 10000;
+        require(msg.value >= totalPrice + platformFeeAmount, "Insufficient payment");
+
+        // Mint tickets
+        for (uint256 i = 0; i < quantity; i++) {
+            uint256 tokenId = _tokenIdCounter.current();
+            _tokenIdCounter.increment();
+
+            tickets[tokenId] = Ticket({
+                eventId: eventId,
+                originalPrice: eventData.originalPrice,
+                hasAttended: false,
+                purchaseTimestamp: block.timestamp,
+                originalBuyer: msg.sender
+            });
+
+            _safeMint(msg.sender, tokenId);
+            
+            emit TicketMinted(tokenId, eventId, msg.sender, eventData.originalPrice);
+        }
+
+        // Update counters
+        eventData.currentSupply += quantity;
+        userTicketCount[eventId][msg.sender] += quantity;
+
+        // Distribute payments
+        platformWallet.transfer(platformFeeAmount);
+        eventData.organizer.transfer(totalPrice);
+
+        // Refund excess payment
+        if (msg.value > totalPrice + platformFeeAmount) {
+            payable(msg.sender).transfer(msg.value - totalPrice - platformFeeAmount);
+        }
+    }
+
+    // ==============================================================================
+    // CONTROLLED RESALE (Price Caps + Royalties)
+    // ==============================================================================
+
+    /**
+     * @dev Resell ticket with automatic price cap and royalty enforcement
+     * @param tokenId Ticket to resell
+     * @param buyerAddress Address of the buyer
+     */
+    function resellTicket(uint256 tokenId, address buyerAddress) 
+        public 
+        payable 
+        nonReentrant 
+        whenNotPaused 
+    {
+        require(_exists(tokenId), "Ticket does not exist");
+        require(ownerOf(tokenId) == msg.sender, "Not the ticket owner");
+        
+        Ticket storage ticket = tickets[tokenId];
+        Event storage eventData = events[ticket.eventId];
+        
+        require(block.timestamp < eventData.eventDate, "Cannot resell after event");
+        require(eventData.isActive, "Event is not active");
+
+        // Calculate maximum allowed resale price
+        uint256 maxPrice = (ticket.originalPrice * eventData.maxResaleMultiplier) / 100;
+        require(msg.value <= maxPrice, "Price exceeds maximum resale limit");
+        require(msg.value > 0, "Invalid sale price");
+
+        // Calculate royalty for organizer
+        uint256 royalty = (msg.value * eventData.royaltyPercentage) / 100;
+        uint256 platformFeeAmount = (msg.value * platformFee) / 10000;
+        uint256 sellerAmount = msg.value - royalty - platformFeeAmount;
+
+        // Verify buyer can purchase (anti-scalping)
+        if (eventData.requiresVerification) {
+            require(verifiedUsers[buyerAddress], "Buyer verification required");
+        }
+        require(
+            userTicketCount[ticket.eventId][buyerAddress] < eventData.maxTicketsPerUser,
+            "Buyer exceeds maximum tickets per user"
+        );
+
+        // Execute transfer
+        _transfer(msg.sender, buyerAddress, tokenId);
+        
+        // Update user ticket counts
+        userTicketCount[ticket.eventId][msg.sender]--;
+        userTicketCount[ticket.eventId][buyerAddress]++;
+
+        // Distribute payments
+        eventData.organizer.transfer(royalty);
+        platformWallet.transfer(platformFeeAmount);
+        payable(msg.sender).transfer(sellerAmount);
+
+        emit TicketResold(tokenId, msg.sender, buyerAddress, msg.value, royalty);
+    }
+
+    // ==============================================================================
+    // ATTENDANCE VERIFICATION (Proof of Attendance NFTs)
+    // ==============================================================================
+
+    /**
+     * @dev Mark attendance for a ticket (called by venue scanner)
+     * @param tokenId Ticket being scanned
+     */
+    function markAttendance(uint256 tokenId) public {
+        require(_exists(tokenId), "Ticket does not exist");
+        
+        Ticket storage ticket = tickets[tokenId];
+        Event storage eventData = events[ticket.eventId];
+        
+        require(msg.sender == eventData.organizer || msg.sender == owner(), "Not authorized");
+        require(!ticket.hasAttended, "Attendance already marked");
+        require(block.timestamp >= eventData.eventDate - 3600, "Too early to check in"); // 1 hour before
+        require(block.timestamp <= eventData.eventDate + 86400, "Event check-in period ended"); // 24 hours after
+
+        ticket.hasAttended = true;
+        
+        emit AttendanceMarked(tokenId, ticket.eventId, ownerOf(tokenId));
+    }
+
+    // ==============================================================================
+    // DID VERIFICATION (Identity Management)
+    // ==============================================================================
+
+    /**
+     * @dev Verify user identity (integration point for DID systems)
+     * @param user Address to verify
+     * @param verified Verification status
+     */
+    function setUserVerification(address user, bool verified) public onlyOwner {
+        verifiedUsers[user] = verified;
+        emit UserVerified(user, verified);
+    }
+
+    /**
+     * @dev Batch verify multiple users (for DID integrations)
+     * @param users Array of addresses to verify
+     * @param verifiedStatus Array of verification statuses
+     */
+    function batchVerifyUsers(address[] memory users, bool[] memory verifiedStatus) public onlyOwner {
+        require(users.length == verifiedStatus.length, "Arrays length mismatch");
+        
+        for (uint256 i = 0; i < users.length; i++) {
+            verifiedUsers[users[i]] = verifiedStatus[i];
+            emit UserVerified(users[i], verifiedStatus[i]);
+        }
+    }
+
+    // ==============================================================================
+    // FRAUD PREVENTION
+    // ==============================================================================
+
+    /**
+     * @dev Report suspicious activity
+     * @param suspiciousUser Address to report
+     * @param reason Reason for the report
+     */
+    function reportFraud(address suspiciousUser, string memory reason) public {
+        emit FraudAlert(suspiciousUser, reason, block.timestamp);
+    }
+
+    // ==============================================================================
+    // VIEW FUNCTIONS (For Frontend Integration)
+    // ==============================================================================
+
+    function getEvent(uint256 eventId) public view returns (Event memory) {
+        return events[eventId];
+    }
+
+    function getTicket(uint256 tokenId) public view returns (Ticket memory) {
+        return tickets[tokenId];
+    }
+
+    function getUserTicketCount(uint256 eventId, address user) public view returns (uint256) {
+        return userTicketCount[eventId][user];
+    }
+
+    function isUserVerified(address user) public view returns (bool) {
+        return verifiedUsers[user];
+    }
+
+    function getMaxResalePrice(uint256 tokenId) public view returns (uint256) {
+        Ticket memory ticket = tickets[tokenId];
+        Event memory eventData = events[ticket.eventId];
+        return (ticket.originalPrice * eventData.maxResaleMultiplier) / 100;
+    }
+
+    // ==============================================================================
+    // ADMIN FUNCTIONS
+    // ==============================================================================
+
+    function pause() public onlyOwner {
+        _pause();
+    }
+
+    function unpause() public onlyOwner {
+        _unpause();
+    }
+
+    function setPlatformFee(uint256 newFee) public onlyOwner {
+        require(newFee <= 500, "Platform fee cannot exceed 5%");
+        platformFee = newFee;
+    }
+
+    function setPlatformWallet(address payable newWallet) public onlyOwner {
+        platformWallet = newWallet;
+    }
+
+    function deactivateEvent(uint256 eventId) public {
+        Event storage eventData = events[eventId];
+        require(msg.sender == eventData.organizer || msg.sender == owner(), "Not authorized");
+        eventData.isActive = false;
+    }
+
+    // ==============================================================================
+    // REQUIRED OVERRIDES
+    // ==============================================================================
 
     function _burn(uint256 tokenId) internal override(ERC721, ERC721URIStorage) {
         super._burn(tokenId);
@@ -63,262 +388,15 @@ contract FairPassTicket is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
     function supportsInterface(bytes4 interfaceId) public view override(ERC721, ERC721URIStorage) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
-    
+
+    // ==============================================================================
+    // EMERGENCY FUNCTIONS
+    // ==============================================================================
+
     /**
-     * @dev Create a new event
+     * @dev Emergency withdraw (only for stuck funds)
      */
-    function createEvent(
-        string memory _name,
-        string memory _venue,
-        uint256 _eventDate,
-        uint256 _ticketPrice,
-        uint256 _maxTickets,
-        uint256 _maxResalePrice,
-        bool _requiresDID,
-        uint256 _sustainabilityTracking
-    ) external returns (uint256) {
-        require(_eventDate > block.timestamp, "Event date must be in the future");
-        require(_maxTickets > 0, "Max tickets must be greater than 0");
-        require(_maxResalePrice >= _ticketPrice, "Max resale price must be >= ticket price");
-        
-        _eventIds.increment();
-        uint256 eventId = _eventIds.current();
-        
-        events[eventId] = Event({
-            id: eventId,
-            name: _name,
-            venue: _venue,
-            eventDate: _eventDate,
-            ticketPrice: _ticketPrice,
-            maxTickets: _maxTickets,
-            ticketsSold: 0,
-            organizer: msg.sender,
-            isActive: true,
-            requiresDID: _requiresDID,
-            maxResalePrice: _maxResalePrice,
-            sustainabilityTracking: _sustainabilityTracking
-        });
-        
-        eventExists[eventId] = true;
-        
-        emit EventCreated(eventId, _name, msg.sender);
-        return eventId;
-    }
-    
-    /**
-     * @dev Mint tickets for an event with DID verification (supports multiple tickets)
-     */
-    function mintTickets(
-        uint256 _eventId,
-        uint256 _quantity,
-        string memory _tokenURI,
-        string memory _didHash
-    ) external payable nonReentrant returns (uint256[] memory) {
-        require(eventExists[_eventId], "Event does not exist");
-        require(events[_eventId].isActive, "Event is not active");
-        require(_quantity > 0 && _quantity <= 10, "Quantity must be 1-10"); // Limit per transaction
-        require(events[_eventId].ticketsSold + _quantity <= events[_eventId].maxTickets, "Not enough tickets available");
-        require(msg.value >= events[_eventId].ticketPrice * _quantity, "Insufficient payment");
-        require(events[_eventId].eventDate > block.timestamp, "Event has already occurred");
-        
-        uint256[] memory tokenIds = new uint256[](_quantity);
-        
-        for (uint256 i = 0; i < _quantity; i++) {
-            _tokenIds.increment();
-            uint256 tokenId = _tokenIds.current();
-            tokenIds[i] = tokenId;
-            
-            _safeMint(msg.sender, tokenId);
-            _setTokenURI(tokenId, _tokenURI);
-            
-            tickets[tokenId] = Ticket({
-                eventId: _eventId,
-                originalBuyer: msg.sender,
-                purchasePrice: events[_eventId].ticketPrice,
-                isUsed: false,
-                purchaseTimestamp: block.timestamp,
-                didVerification: _didHash
-            });
-            
-            userTickets[msg.sender].push(tokenId);
-            
-            emit TicketMinted(tokenId, _eventId, msg.sender, _didHash);
-        }
-        
-        events[_eventId].ticketsSold += _quantity;
-        ticketCountForEvent[msg.sender][_eventId] += _quantity;
-        
-        return tokenIds;
-    }
-    
-    /**
-     * @dev Legacy single ticket mint function (for backward compatibility)
-     */
-    function mintTicket(
-        uint256 _eventId,
-        string memory _tokenURI,
-        string memory _didHash
-    ) external payable nonReentrant returns (uint256) {
-        uint256[] memory tokenIds = this.mintTickets{value: msg.value}(_eventId, 1, _tokenURI, _didHash);
-        return tokenIds[0];
-    }
-    
-    /**
-     * @dev Use a ticket at the event
-     */
-    function useTicket(uint256 _tokenId) external {
-        require(_exists(_tokenId), "Ticket does not exist");
-        require(ownerOf(_tokenId) == msg.sender, "Not ticket owner");
-        require(!tickets[_tokenId].isUsed, "Ticket already used");
-        
-        uint256 eventId = tickets[_tokenId].eventId;
-        require(events[eventId].isActive, "Event is not active");
-        
-        // Allow ticket usage 1 hour before event start
-        require(
-            block.timestamp >= (events[eventId].eventDate - 1 hours) &&
-            block.timestamp <= (events[eventId].eventDate + 6 hours),
-            "Ticket can only be used during event window"
-        );
-        
-        tickets[_tokenId].isUsed = true;
-        emit TicketUsed(_tokenId, eventId);
-    }
-    
-    /**
-     * @dev Safe transfer with anti-scalping protection
-     */
-    function safeTransferWithPriceLimit(
-        address from,
-        address to,
-        uint256 tokenId,
-        uint256 price
-    ) external payable nonReentrant {
-        require(_exists(tokenId), "Ticket does not exist");
-        require(ownerOf(tokenId) == from, "Not ticket owner");
-        require(from == msg.sender || getApproved(tokenId) == msg.sender, "Not authorized");
-        require(!tickets[tokenId].isUsed, "Cannot transfer used ticket");
-        
-        uint256 eventId = tickets[tokenId].eventId;
-        require(price <= events[eventId].maxResalePrice, "Price exceeds maximum resale price");
-        require(msg.value >= price, "Insufficient payment");
-        
-        // Transfer ticket
-        _safeTransfer(from, to, tokenId, "");
-        
-        // Update mappings
-        ticketCountForEvent[from][eventId]--;
-        ticketCountForEvent[to][eventId]++;
-        
-        // Update user tickets arrays
-        _removeTicketFromUser(from, tokenId);
-        userTickets[to].push(tokenId);
-        
-        // Handle payment
-        if (price > 0) {
-            payable(from).transfer(price);
-            if (msg.value > price) {
-                payable(msg.sender).transfer(msg.value - price);
-            }
-        }
-        
-        emit TicketResold(tokenId, from, to, price);
-    }
-    
-    /**
-     * @dev Helper function to remove ticket from user's array
-     */
-    function _removeTicketFromUser(address user, uint256 tokenId) internal {
-        uint256[] storage tickets_array = userTickets[user];
-        for (uint256 i = 0; i < tickets_array.length; i++) {
-            if (tickets_array[i] == tokenId) {
-                tickets_array[i] = tickets_array[tickets_array.length - 1];
-                tickets_array.pop();
-                break;
-            }
-        }
-    }
-    
-    /**
-     * @dev Get user's tickets for an event
-     */
-    function getUserTicketsForEvent(address user, uint256 eventId) external view returns (uint256[] memory) {
-        uint256[] memory allUserTickets = userTickets[user];
-        uint256 count = 0;
-        
-        // Count tickets for this event
-        for (uint256 i = 0; i < allUserTickets.length; i++) {
-            if (tickets[allUserTickets[i]].eventId == eventId) {
-                count++;
-            }
-        }
-        
-        // Create result array
-        uint256[] memory eventTickets = new uint256[](count);
-        uint256 index = 0;
-        
-        for (uint256 i = 0; i < allUserTickets.length; i++) {
-            if (tickets[allUserTickets[i]].eventId == eventId) {
-                eventTickets[index] = allUserTickets[i];
-                index++;
-            }
-        }
-        
-        return eventTickets;
-    }
-    
-    /**
-     * @dev Get all user's tickets
-     */
-    function getUserTickets(address user) external view returns (uint256[] memory) {
-        return userTickets[user];
-    }
-    
-    /**
-     * @dev Get event details
-     */
-    function getEvent(uint256 _eventId) external view returns (Event memory) {
-        require(eventExists[_eventId], "Event does not exist");
-        return events[_eventId];
-    }
-    
-    /**
-     * @dev Get ticket details
-     */
-    function getTicket(uint256 _tokenId) external view returns (Ticket memory) {
-        require(_exists(_tokenId), "Ticket does not exist");
-        return tickets[_tokenId];
-    }
-    
-    /**
-     * @dev Verify ticket authenticity and status
-     */
-    function verifyTicket(uint256 _tokenId) external view returns (
-        bool exists,
-        bool isValid,
-        bool isUsed,
-        uint256 eventId,
-        address owner
-    ) {
-        exists = _exists(_tokenId);
-        if (exists) {
-            isValid = !tickets[_tokenId].isUsed && events[tickets[_tokenId].eventId].isActive;
-            isUsed = tickets[_tokenId].isUsed;
-            eventId = tickets[_tokenId].eventId;
-            owner = ownerOf(_tokenId);
-        }
-    }
-    
-    /**
-     * @dev Get total CO2 offset for sustainability tracking
-     */
-    function getTotalCO2Offset() external view returns (uint256) {
-        uint256 totalOffset = 0;
-        for (uint256 i = 1; i <= _eventIds.current(); i++) {
-            if (eventExists[i]) {
-                totalOffset += events[i].sustainabilityTracking * events[i].ticketsSold;
-            }
-        }
-        return totalOffset;
+    function emergencyWithdraw() public onlyOwner {
+        payable(owner()).transfer(address(this).balance);
     }
 }
